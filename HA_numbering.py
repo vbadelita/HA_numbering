@@ -7,6 +7,7 @@ import os
 import tempfile
 import sys
 import subprocess
+import argparse
 
 
 def Align(headers_seqs, progpath, program='PROBCONS', musclegapopen=None):
@@ -28,9 +29,7 @@ def Align(headers_seqs, progpath, program='PROBCONS', musclegapopen=None):
         at least 2 entries.
 
     'progpath' should specify a directory containing the alignment program executable,
-        either PROBCONS or MUSCLE.  The PROBCONS executable is assumed to have
-        the name "probcons" in this directory.  The MUSCLE executable is assumed to
-        have the name "muscle" in this directory.
+        either PROBCONS or MUSCLE. If None, the program is assumed to be in PATH.
 
     'program' specifies what program to use for the alignment.  By default, it is
         "PROBCONS".  If you wish to use MUSCLE instead, set it to "MUSCLE".  
@@ -49,17 +48,25 @@ def Align(headers_seqs, progpath, program='PROBCONS', musclegapopen=None):
         are in the same order as in the input list 'headers_seqs'.
     """
     if not (isinstance(headers_seqs, list) and len(headers_seqs) >= 2):
-        raise ValueError, 'header_seqs does not specify a list with at least two entries.'
-    if not os.path.isdir(progpath):
-        raise ValueError, "Cannot find directory %s." % progpath
+        raise ValueError('header_seqs does not specify a list with at least two entries.')
+    
+    # Determine executable name
     if program == 'PROBCONS':
-        exe = os.path.abspath("%s/probcons" % progpath) # the executable
+        exe_name = 'probcons'
     elif program == 'MUSCLE':
-        exe = os.path.abspath("%s/muscle" % progpath) # the executable
+        exe_name = 'muscle'
     else:
-        raise ValueError, "Invalid value of %s for 'program'." % (str(program))
-    if not os.path.isfile(exe):
-        raise IOError, "Cannot find executable at %s." % exe
+        raise ValueError("Invalid value of %s for 'program'." % (str(program)))
+    
+    # Build executable path
+    if progpath is None:
+        exe = exe_name  # Use PATH
+    else:
+        if not os.path.isdir(progpath):
+            raise ValueError("Cannot find directory %s." % progpath)
+        exe = os.path.abspath("%s/%s" % (progpath, exe_name))
+        if not os.path.isfile(exe):
+            raise IOError("Cannot find executable at %s." % exe)
     currdir = os.getcwd()
     tempdir = tempfile.mkdtemp()
     try:
@@ -73,9 +80,9 @@ def Align(headers_seqs, progpath, program='PROBCONS', musclegapopen=None):
             open(outfile, 'w').write(output)
         elif program == 'MUSCLE':
             if musclegapopen != None:
-                p = subprocess.Popen("%s -gapopen %d -in %s -out %s" % (exe, musclegapopen, infile, outfile), shell = True, stdout = subprocess.PIPE, stderr = subprocess.PIPE) # run MUSCLE
+                p = subprocess.Popen("%s -align %s -output %s -gapopen %d" % (exe, infile, outfile, musclegapopen), shell = True, stdout = subprocess.PIPE, stderr = subprocess.PIPE) # run MUSCLE
             else:
-                p = subprocess.Popen("%s -in %s -out %s" % (exe, infile, outfile), shell = True, stdout = subprocess.PIPE, stderr = subprocess.PIPE) # run MUSCLE
+                p = subprocess.Popen("%s -align %s -output %s" % (exe, infile, outfile), shell = True, stdout = subprocess.PIPE, stderr = subprocess.PIPE) # run MUSCLE
             (output, errors) = p.communicate()
         try:
             aligned_headers_seqs = ReadFASTA(outfile)
@@ -88,7 +95,7 @@ def Align(headers_seqs, progpath, program='PROBCONS', musclegapopen=None):
             os.remove("%s/%s" % (tempdir, file)) # remove files from temporary directory
         os.rmdir(tempdir) # remove temporary directory
     if len(aligned_headers_seqs) != len(headers_seqs):
-        raise ValueError, "Did not return the correct number of aligned sequences."
+        raise ValueError("Did not return the correct number of aligned sequences.")
     # put the aligned sequences in the same order as the input sequences
     n = len(aligned_headers_seqs[0][1]) # length of aligned sequences
     d = dict(aligned_headers_seqs)
@@ -97,13 +104,13 @@ def Align(headers_seqs, progpath, program='PROBCONS', musclegapopen=None):
         try:
             alignedseq = d[head]
         except KeyError:
-            raise ValueError, "After alignment, the following header is missing: %s" % head
+            raise ValueError("After alignment, the following header is missing: %s" % head)
         if len(alignedseq) != n:
             open('errors.temp', 'w').write(errors)
-            raise ValueError, "Aligned sequence %s is not of length %d: if you are using MUSCLE, you may be running out of memory.  Errors have been written to errors.temp." % (alignedseq, n)
+            raise ValueError("Aligned sequence %s is not of length %d: if you are using MUSCLE, you may be running out of memory.  Errors have been written to errors.temp." % (alignedseq, n))
         if len(seq) > n:
             open('errors.temp', 'w').write(errors)
-            raise ValueError, "Unaligned seq %s is longer than aligned length of %d: if you are using MUSCLE, you many be running out of memory.  Errors have been written to errors.temp." % (seq, n)
+            raise ValueError("Unaligned seq %s is longer than aligned length of %d: if you are using MUSCLE, you many be running out of memory.  Errors have been written to errors.temp." % (seq, n))
         aligned_headers_seqs.append((head, alignedseq))
     return aligned_headers_seqs # return the aligned sequences
     
@@ -129,7 +136,7 @@ def StripGapsToFirstSequence(aligned_headers_seqs):
     [('s1', 'ATAGC'), ('s2', 'ATTGC'), ('s3', '-TAGC')]
     """        
     if not (isinstance(aligned_headers_seqs, list) and len(aligned_headers_seqs) >= 2):
-        raise ValueError, "aligned_headers_seqs does not specify at least two aligned sequences."
+        raise ValueError("aligned_headers_seqs does not specify at least two aligned sequences.")
     (ref_head, ref_seq) = aligned_headers_seqs[0]
     non_strip_positions = [] # positions not to strip away
     stripped_ref_seq = []
@@ -197,9 +204,9 @@ def ReadFASTA(fastafile):
             if (not header) and (not seq):
                 pass # first sequence in file
             elif header and not seq:
-                raise ValueError, "Empty sequence for %s" % header
+                raise ValueError("Empty sequence for %s" % header)
             elif seq and not header:
-                raise ValueError, "File does not begin with header."
+                raise ValueError("File does not begin with header.")
             else:
                 seq = ''.join(seq)
                 seq = seq.replace(' ', '')
@@ -211,9 +218,9 @@ def ReadFASTA(fastafile):
     if (not header) and (not seq):
         pass # first sequence in file
     elif header and not seq:
-        raise ValueError, "Empty sequence for %s" % header
+        raise ValueError("Empty sequence for %s" % header)
     elif seq and not header:
-        raise ValueError, "File does not begin with header."
+        raise ValueError("File does not begin with header.")
     else:
         seq = ''.join(seq)
         seq = seq.replace(' ', '')
@@ -255,42 +262,47 @@ def GetCorrespondingResidue(seqs, i):
 
 def main():
     """Main body of script."""
-    print "\nBeginning execution of HA_numbering.py script."
+    print("\nBeginning execution of HA_numbering.py script.")
     
     # parse arguments
-    args = sys.argv[1 : ]
-    if len(args) != 1:
-        raise IOError("Script must be called with exactly one argument specifying the input file.")
-    infile = args[0]
-    print "Reading input from %s" % infile
+    parser = argparse.ArgumentParser(
+        description="HA numbering scheme conversion script."
+    )
+    parser.add_argument(
+        "fasta_file",
+        help="FASTA file containing the HA sequence (first sequence will be used)"
+    )
+    parser.add_argument(
+        "sites",
+        nargs="+",
+        type=int,
+        help="Site numbers to convert (space-separated integers)"
+    )
+    parser.add_argument(
+        "--program",
+        choices=["MUSCLE", "PROBCONS"],
+        default="MUSCLE",
+        help="Alignment program to use (default: MUSCLE)"
+    )
+    args = parser.parse_args()
+    
+    # Read FASTA file
+    infile = args.fasta_file
+    print("Reading HA sequence from %s" % infile)
     if not os.path.isfile(infile):
-        raise IOError("Cannot find infile of %s in the current directory." % infile)
-    lines = [line.split(None, 1) for line in open(infile) if not line.isspace()]
-    if len(lines) != 3:
-        raise IOError("Failed to find exactly three non-empty lines in infile")
-    if lines[0][0] == 'probconspath' and len(lines[0]) == 2:
-        alignerpath = lines[0][1].strip()
-        if not os.path.isdir(alignerpath):
-            raise IOError("The directory of %s specified by probconspath does not exist." % (alignerpath))
-        prog = 'PROBCONS'
-    elif lines[0][0] == 'musclepath' and len(lines[0]) == 2:
-        alignerpath = lines[0][1].strip()
-        if not os.path.isdir(alignerpath):
-            raise IOError("The directory of %s specified by musclepath does not exist." % (alignerpath))
-        prog = 'MUSCLE'
-    else:
-        raise IOError("First line does not specify probconspath or musclepath")
-    if lines[1][0] == 'ha_sequence' and len(lines[0]) == 2:
-        ha_sequence = lines[1][1].strip().upper()
-    else:
-        raise IOError("Second line does not specify ha_sequence")
-    if lines[2][0] == 'sites' and len(lines[0]) == 2:
-        try:
-            sites = [int(x) for x in lines[2][1].split()]
-        except ValueError:
-            raise ValueError("sites does not specify valid integer site numbers.")
-    else:
-        raise IOError("Third line does not specify sites")
+        raise IOError("Cannot find FASTA file %s" % infile)
+    
+    headers_seqs = ReadFASTA(infile)
+    if len(headers_seqs) == 0:
+        raise IOError("No sequences found in FASTA file %s" % infile)
+    
+    ha_sequence = headers_seqs[0][1].upper()
+    print("Read sequence with header: %s" % headers_seqs[0][0])
+    print("Sequence length: %d" % len(ha_sequence))
+    
+    # Set up alignment program (assume it's in PATH)
+    prog = args.program
+    sites = args.sites
 
     # Define sequences and their numbering conversions.
     # The sequences are in seq_d and keyed by PDB code.
@@ -327,11 +339,11 @@ def main():
     assert len(seq_d['4JTV']) == len(label_d['4JTV'])
 
     # make alignments
-    print "Making %s alignments..." % prog
+    print("Making %s alignments..." % prog)
     alignments = {}
     for seqname in seq_names:
-        alignments[seqname] = Align([('seq', ha_sequence), (seqname, seq_d[seqname])], alignerpath, prog)
-    print "Alignments complete.\n\nHere are the corresponding residue numbers:"
+        alignments[seqname] = Align([('seq', ha_sequence), (seqname, seq_d[seqname])], None, prog)
+    print("Alignments complete.\n\nHere are the corresponding residue numbers:")
     for site in sites:
         if not (1 <= site <= len(ha_sequence)):
             raise ValueError("site %d is outside the valid range for sequential numbering of ha_sequence starting at 1." % site)
@@ -345,9 +357,9 @@ def main():
                     raise ValueError("Invalid corrresponding residue for %s -- something is wrong with this program" % seqname)
                 aa = seq_d[seqname][i - 1]
                 sitestring.append('  * %s%s in %s' % (aa, label_d[seqname][i], seqname))
-        print '\n'.join(sitestring)
+        print('\n'.join(sitestring))
 
-    print "\nScript complete."
+    print("\nScript complete.")
 
 
 
