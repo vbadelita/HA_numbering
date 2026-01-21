@@ -311,6 +311,7 @@ def main():
     seq_names = ['4HMG', '4JTV']
     seq_d = {}
     label_d = {}
+    subtype_d = {'4HMG': 'H3N2', '4JTV': 'H1N1'}
     seq_4hmg_a = \
         'QDLPGNDNSTATLCLGHHAVPNGTLVKTITDDQIEVTNATELVQSSSTGKICNNPHRILDGIDCTLIDALLGDPHCDVFQ' +\
         'NETWDLFVERSKAFSNCYPYDVPDYASLRSLVASSGTLEFITEGFTWTGVTQNGGSNACKRGPGSGFFSRLNWLTKSGST' +\
@@ -351,12 +352,12 @@ def main():
         for seqname in seq_names:
             i = GetCorrespondingResidue(alignments[seqname], site)
             if i == None:
-                sitestring.append('  * an alignment gap in %s' % seqname) 
+                sitestring.append('  * an alignment gap in %s (%s)' % (seqname, subtype_d[seqname])) 
             else:
                 if not (1 <= i <= len(seq_d[seqname])):
                     raise ValueError("Invalid corrresponding residue for %s -- something is wrong with this program" % seqname)
                 aa = seq_d[seqname][i - 1]
-                sitestring.append('  * %s%s in %s' % (aa, label_d[seqname][i], seqname))
+                sitestring.append('  * %s%s in %s (%s)' % (aa, label_d[seqname][i], seqname, subtype_d[seqname]))
         print('\n'.join(sitestring))
 
     print("\nScript complete.")
